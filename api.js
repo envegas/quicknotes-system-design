@@ -10,7 +10,7 @@ const titleInput = document.getElementById("title-input");
 const bodyInput = document.getElementById("body-input");
 const submitButton = document.getElementById("submit-btn");
 
-// Reusable function for making API requests.
+// Reusable function for API requests.
 async function request(url, options = {}) {
     const response = await fetch(url, options);
 
@@ -36,7 +36,33 @@ function showStatus(message, type = "") {
     statusMessage.className = type;
 }
 
-// Display notes safely.
+// Create a note element safely.
+function createNoteElement(note) {
+    const listItem = document.createElement("li");
+    listItem.className = "note-item";
+    listItem.dataset.id = note.id;
+
+    const title = document.createElement("h3");
+    title.textContent = note.title;
+
+    const body = document.createElement("p");
+    body.textContent = note.body || "";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.textContent = "Delete";
+    deleteButton.className = "delete-btn";
+
+    deleteButton.addEventListener("click", () => {
+        deleteNote(note.id, deleteButton);
+    });
+
+    listItem.append(title, body, deleteButton);
+
+    return listItem;
+}
+
+// Display notes.
 function displayNotes(notes) {
     notesList.replaceChildren();
 
@@ -49,17 +75,7 @@ function displayNotes(notes) {
     }
 
     notes.forEach(note => {
-        const listItem = document.createElement("li");
-        listItem.className = "note-item";
-
-        const title = document.createElement("h3");
-        title.textContent = note.title;
-
-        const body = document.createElement("p");
-        body.textContent = note.body;
-
-        listItem.append(title, body);
-        notesList.appendChild(listItem);
+        notesList.appendChild(createNoteElement(note));
     });
 }
 
@@ -98,7 +114,6 @@ async function createNote(event) {
     const title = titleInput.value.trim();
     const body = bodyInput.value.trim();
 
-    // Validate the title before sending the request.
     if (!title) {
         showStatus("Please enter a note title.", "error");
         titleInput.focus();
@@ -121,45 +136,80 @@ async function createNote(event) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                title: title,
-                body: body,
+                title,
+                body,
                 userId: 1
             })
         });
 
         const newNote = result.data;
 
-        // Add the newly created note to the top of the existing list.
-        const newItem = document.createElement("li");
-        newItem.className = "note-item";
+        // Remove the empty-state message if present.
+        notesList.querySelector(".empty-state")?.remove();
 
-        const noteTitle = document.createElement("h3");
-        noteTitle.textContent = newNote.title;
-
-        const noteBody = document.createElement("p");
-        noteBody.textContent = newNote.body;
-
-        newItem.append(noteTitle, noteBody);
-        notesList.prepend(newItem);
+        // Add the newly created note to the top.
+        notesList.prepend(createNoteElement(newNote));
 
         showStatus(
             `Note created (status ${result.status}, id ${newNote.id}).`,
             "success"
         );
 
-        // Clear the form after successful creation.
         noteForm.reset();
 
     } catch (error) {
-        showStatus(
-            "Unable to create note. Please try again.",
-            "error"
-        );
-
+        showStatus("Unable to create note. Please try again.", "error");
         console.error("POST request error:", error);
 
     } finally {
         submitButton.disabled = false;
+    }
+}
+
+// DELETE: Remove a note.
+async function deleteNote(noteId, deleteButton) {
+    deleteButton.disabled = true;
+    showStatus("Deleting note...");
+
+    try {
+        const result = await request(`${API_URL}/${noteId}`, {
+            method: "DELETE"
+        });
+
+        // JSONPlaceholder simulates DELETE requests.
+        // It does not permanently delete server records.
+        // We remove the note locally after a successful response.
+        const noteElement = notesList.querySelector(
+            `[data-id="${noteId}"]`
+        );
+
+        if (noteElement) {
+            noteElement.remove();
+        }
+
+        // Show an empty state if no notes remain.
+        if (notesList.children.length === 0) {
+            const emptyMessage = document.createElement("li");
+            emptyMessage.className = "empty-state";
+            emptyMessage.textContent = "No notes found.";
+            notesList.appendChild(emptyMessage);
+        }
+
+        showStatus(
+            `Note ${noteId} deleted successfully (status ${result.status}).`,
+            "success"
+        );
+
+    } catch (error) {
+        showStatus(
+            "Unable to delete note. Please try again.",
+            "error"
+        );
+
+        console.error("DELETE request error:", error);
+
+    } finally {
+        deleteButton.disabled = false;
     }
 }
 
